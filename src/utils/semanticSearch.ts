@@ -10,10 +10,40 @@ interface SemanticSearchResponse {
   error?: string
 }
 
+// Получаем API URLs из переменных окружения
+const getApiConfig = () => {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://faq-demo.cvety.kz/api'
+  const productsEndpoint = import.meta.env.VITE_PRODUCTS_SEARCH_ENDPOINT || '/products-search'
+  const devMode = import.meta.env.VITE_DEV_MODE === 'true'
+  const fallbackUrl = import.meta.env.VITE_FALLBACK_API_URL || 'http://localhost:8787/api'
+  
+  // Debug: логируем переменные окружения
+  console.log('Environment variables:', {
+    VITE_DEV_MODE: import.meta.env.VITE_DEV_MODE,
+    devMode: devMode,
+    baseUrl: baseUrl
+  })
+  
+  return {
+    productsSearchUrl: `${baseUrl}${productsEndpoint}`,
+    devMode,
+    fallbackUrl: `${fallbackUrl}${productsEndpoint}`
+  }
+}
+
 // Семантический поиск товаров
 export async function searchProductsSemantic(query: string, maxResults = 6): Promise<Product[]> {
+  const config = getApiConfig()
+  
+  // Если включен dev режим, сразу используем fallback
+  if (config.devMode) {
+    console.log('Dev mode enabled, using fallback search')
+    return fallbackTextSearch(query, maxResults)
+  }
+
   try {
-    const response = await fetch('https://faq-demo.cvety.kz/api/products-search', {
+    // Пробуем основной API
+    let response = await fetch(config.productsSearchUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -23,6 +53,21 @@ export async function searchProductsSemantic(query: string, maxResults = 6): Pro
         maxResults
       })
     })
+
+    // Если основной API недоступен, пробуем fallback URL
+    if (!response.ok && config.fallbackUrl !== config.productsSearchUrl) {
+      console.log(`Primary API failed (${response.status}), trying fallback URL`)
+      response = await fetch(config.fallbackUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          maxResults
+        })
+      })
+    }
 
     if (!response.ok) {
       throw new Error(`Search API error: ${response.status}`)
@@ -134,8 +179,19 @@ function fallbackTextSearch(query: string, maxResults = 6): Product[] {
 
 // Инициализация векторов (вызывается один раз)
 export async function initializeProductVectors(): Promise<boolean> {
+  const config = getApiConfig()
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://faq-demo.cvety.kz/api'
+  const vectorizeEndpoint = import.meta.env.VITE_VECTORIZE_ENDPOINT || '/vectorize-products'
+  const vectorizeUrl = `${baseUrl}${vectorizeEndpoint}`
+  
+  // В dev режиме пропускаем инициализацию векторов
+  if (config.devMode) {
+    console.log('Dev mode enabled, skipping vector initialization')
+    return true
+  }
+
   try {
-    const response = await fetch('https://faq-demo.cvety.kz/api/vectorize-products', {
+    const response = await fetch(vectorizeUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -157,5 +213,13 @@ export async function initializeProductVectors(): Promise<boolean> {
 
 // Получить популярные товары через семантический поиск
 export async function getPopularProductsSemantic(): Promise<Product[]> {
+  const config = getApiConfig()
+  
+  // Если включен dev режим, сразу используем fallback
+  if (config.devMode) {
+    console.log('Dev mode enabled in getPopularProductsSemantic, using fallback search')
+    return fallbackTextSearch('популярные букеты розы', 4)
+  }
+  
   return searchProductsSemantic('популярные букеты розы', 4)
 }

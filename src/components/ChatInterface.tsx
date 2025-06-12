@@ -230,14 +230,18 @@ export function ChatInterface() {
           }
 
           logger.current?.log('api_request', {
-            url: 'https://faq-demo.cvety.kz/api/chat-stream',
+            url: chatUrl,
             method: 'POST',
             body: requestBody,
             query: messageContent
           })
           
-          // Используем рабочий endpoint
-          const response = await fetch('https://faq-demo.cvety.kz/api/chat', {
+          // Используем API endpoint из переменных окружения
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://faq-demo.cvety.kz/api'
+          const chatEndpoint = import.meta.env.VITE_CHAT_ENDPOINT || '/chat'
+          const chatUrl = `${baseUrl}${chatEndpoint}`
+          
+          const response = await fetch(chatUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
